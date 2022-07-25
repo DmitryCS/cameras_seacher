@@ -21,24 +21,27 @@ func getStatus(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "Status check passed!\n")
 }
 
-// Stream represents a camera's RTSP stream
-type Stream struct {
-	Device   string   `json:"device"`
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	Routes   []string `json:"route"`
-	Address  string   `json:"address" validate:"required"`
-	Port     uint16   `json:"port" validate:"required"`
-
-	CredentialsFound bool `json:"credentials_found"`
-	RouteFound       bool `json:"route_found"`
-	Available        bool `json:"available"`
-
-	AuthenticationType int `json:"authentication_type"`
-}
 type CameradarJSON struct {
 	Targets []string `json:"targets"`
 	Ports   []string `json:"ports"`
+}
+
+type CameradarResponseJSON struct {
+	Ips       []string `json:"ips"`
+	Ports     []string `json:"ports"`
+	Routes    []string `json:"routes"`
+	Usernames []string `json:"usernames"`
+	Passwords []string `json:"passwords"`
+}
+type CameraR struct {
+	Ip       string   `json:"ip"`
+	Port     string   `json:"port"`
+	Routes   []string `json:"routes"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+}
+type CameraResponseJSON struct {
+	Cameras []CameraR `json:"cameras"`
 }
 
 func toBase64(b []byte) string {
@@ -47,7 +50,6 @@ func toBase64(b []byte) string {
 
 func postCameradar(w http.ResponseWriter, r *http.Request) {
 	time_start_request := time.Now().UnixNano()
-	// Load data in Mat.gocv
 	decoder := json.NewDecoder(r.Body)
 	var data_json CameradarJSON
 	err := decoder.Decode(&data_json)
@@ -66,10 +68,10 @@ func postCameradar(w http.ResponseWriter, r *http.Request) {
 		cameradar.WithAttackInterval(0),
 		cameradar.WithTimeout(2000*time.Millisecond),
 	)
-
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	scanResult, err := c.Scan()
 	if err != nil {
 		fmt.Println(err)
@@ -80,15 +82,21 @@ func postCameradar(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	// c.PrintStreams(streams)
-
+	var p CameraResponseJSON
 	for _, stream := range streams {
-		fmt.Println("\nCamera ip address: ", stream.Address, "\nCamera Port: ", stream.Port, "\nCamera routes: ", stream.Route(), "\nCamera username: ",
-			stream.Username, "\nCamera password: ", stream.Password)
+		cam_t := CameraR{Ip: stream.Address,
+			Port:     strconv.Itoa(int(stream.Port)),
+			Routes:   stream.Routes,
+			Username: stream.Username,
+			Password: stream.Password}
+		p.Cameras = append(p.Cameras, cam_t)
+		// fmt.Println("\nCamera ip address: ", stream.Address, "\nCamera Port: ", stream.Port, "\nCamera routes: ", stream.Routes, "\nCamera username: ",
+		// 	stream.Username, "\nCamera password: ", stream.Password)
 	}
+	w.Header().Set("Content-Type", "application/json")
+
+	json.NewEncoder(w).Encode(p)
 	log.Println("Full request time: ", float64(time.Now().UnixNano()-time_start_request)/float64(1e9))
-	io.WriteString(w, "Cameras_found: ")
 }
 
 func main() {
